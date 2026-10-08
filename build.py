@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The Semigroup Gazette: prints a fresh index.html each run. Standard library only."""
-import csv, datetime as dt, html, io, json, re, sys, time
+import csv, datetime as dt, html, io, json, os, re, sys, time
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
 
 # ---- Things you may want to edit -------------------------------------------
 TITLE = "The Semigroup Gazette"
@@ -40,6 +41,24 @@ LEXICON = [
  ("Mal'cev terms", "A variety has a term p with p(x,y,y) = x = p(y,y,x) iff its congruences permute."),
  ("Word problem", "Deciding whether two words are equal in a finitely presented semigroup is undecidable in general (Markov and Post, 1947)."),
  ("Rees matrix semigroups", "The Rees–Suschkewitsch theorem: completely simple semigroups are exactly the Rees matrix semigroups M[G; I, Λ; P] over a group G."),
+]
+PROBLEMS = [
+ ("An idempotent in every finite semigroup", "Show that every finite semigroup contains an idempotent.",
+  "Take any a. Two of a, a², a³, … coincide, so a^m = a^(m+p) for some m, p ≥ 1. Choose n ≥ m that is a multiple of p. Then a^(2n) = a^n, so a^n is idempotent."),
+ ("Idempotents in T₃", "How many idempotents does the full transformation monoid on {1, 2, 3} have?",
+  "An idempotent fixes its image pointwise. Choose an image of size k and send the other 3 − k points anywhere inside it: Σ C(3,k)·k^(3−k) = 3 + 6 + 1 = 10."),
+ ("A Frobenius number", "Find the Frobenius number and the genus of the numerical semigroup ⟨3, 5⟩.",
+  "Its elements are 0, 3, 5, 6, 8, 9, 10, … The gaps are 1, 2, 4, 7, so the Frobenius number is 7 and the genus is 4. In general ⟨a, b⟩ has Frobenius number ab − a − b."),
+ ("Two inverses agree", "In a monoid, a has a left inverse l (la = 1) and a right inverse r (ar = 1). Show that l = r.",
+  "l = l(ar) = (la)r = r."),
+ ("Semigroups of order 2", "Up to isomorphism, how many semigroups have exactly two elements? Name them.",
+  "Five: the cyclic group of order 2, the two-element semilattice, the left-zero semigroup, the right-zero semigroup, and the null semigroup (every product equals one element 0)."),
+ ("Counting partial bijections", "How many elements does the symmetric inverse monoid I₂ have?",
+  "Count partial bijections of {1, 2} by domain size k: Σ C(2,k)²·k! = 1 + 4 + 2 = 7."),
+ ("Cancellative means group", "Show that a finite cancellative semigroup is a group.",
+  "For fixed a, x ↦ ax is injective, hence bijective, so ax = b is always solvable; likewise xa = b. Pick e with ae = a. For any b, solve ya = b; then be = yae = ya = b, so e is a right identity. Symmetrically there is a left identity f, and f = fe = e. Solving ax = e gives inverses."),
+ ("Brandt idempotents", "The Brandt semigroup B_n consists of the n² matrix units e_ij and a zero, with e_ij e_kl = e_il if j = k and 0 otherwise. How many idempotents does it have?",
+  "e_ij e_ij = e_ij only when i = j; otherwise the product is 0. The idempotents are the n elements e_ii and 0: n + 1 in all."),
 ]
 UA = {"User-Agent": "SemigroupGazette/1.0 (personal gift project)"}
 esc = html.escape
@@ -153,6 +172,88 @@ def coffee_html():
     out += '<p class="muted">Wholesale green-bean futures, last close. Not what the café charges you.</p>'
     return out
 
+class Figs(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.figs = []; self.cur = None; self.depth = 0; self.cap = False; self.base = None
+    def handle_starttag(self, tag, a):
+        a = dict(a)
+        if tag == "base" and a.get("href"): self.base = a["href"]
+        elif tag == "figure":
+            if self.depth == 0: self.cur = {"imgs": [], "cap": ""}
+            self.depth += 1
+        elif self.depth and tag == "img" and a.get("src") and "ltx_Math" not in (a.get("class") or ""):
+            self.cur["imgs"].append(a["src"])
+        elif self.depth and tag == "figcaption": self.cap = True
+    def handle_endtag(self, tag):
+        if tag == "figcaption": self.cap = False
+        elif tag == "figure" and self.depth:
+            self.depth -= 1
+            if self.depth == 0: self.figs.append(self.cur)
+    def handle_data(self, d):
+        if self.cap and self.cur is not None: self.cur["cap"] += d
+
+KEYS = ["cayley graph", "diagram", "hasse", "egg-box", "eggbox", "automaton", "graph", "lattice", "quiver", "tree", "picture"]
+
+def diagram_html(papers):
+    best = None
+    for p in papers[:10]:
+        idv = p["url"].rsplit("/abs/", 1)[-1]
+        txt = get(f"https://arxiv.org/html/{idv}", tries=1)
+        if not txt: continue
+        fp = Figs()
+        try: fp.feed(txt)
+        except Exception: continue
+        base = urllib.parse.urljoin("https://arxiv.org", fp.base) if fp.base else f"https://arxiv.org/html/{idv}/"
+        for f in fp.figs:
+            imgs = [s for s in f["imgs"] if re.search(r"\.(png|jpe?g|gif|svg|webp)(\?|$)", s, re.I)]
+            cap = re.sub(r"\s+", " ", f["cap"]).strip()
+            score = sum(k in cap.lower() for k in KEYS)
+            if imgs and score and (best is None or score > best[0]):
+                best = (score, p, urllib.parse.urljoin(base, imgs[0]), cap)
+        time.sleep(1)
+    if not best:
+        return '<section class="diagram"><p class="muted">No diagram turned up in today\'s papers. One will appear as soon as a recent paper offers one.</p></section>'
+    _, p, src, cap = best
+    return (f'<section class="diagram"><figure><img src="{esc(src)}" alt="{esc(cap[:150])}" loading="lazy">'
+            f'<figcaption><b>The Diagram of the Day.</b> {esc(cap[:260])} From <a href="{p["url"]}">{esc(p["title"])}</a>, '
+            f'{byline(p)}. Image courtesy of the authors, via arXiv.</figcaption></figure></section>')
+
+def news_html():
+    qs = [("Mathematics and AI", 'mathematics ("artificial intelligence" OR AI) when:14d'),
+          ("Across mathematics", 'mathematicians (theorem OR proof OR prize OR discovery) when:14d')]
+    cols = ""
+    for head, q in qs:
+        xml = get("https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": "en", "gl": "US", "ceid": "US:en"}), tries=2)
+        li, seen = "", set()
+        try:
+            for it in ET.fromstring(xml).iter("item"):
+                src = it.findtext("source", "")
+                t = it.findtext("title", "")
+                if src and t.endswith(" - " + src): t = t[:-len(src) - 3]
+                if t.lower() in seen: continue
+                seen.add(t.lower())
+                li += f'<li><a href="{esc(it.findtext("link", ""))}">{esc(t)}</a> <i>{esc(src)}, {esc(it.findtext("pubDate", "")[:16])}</i></li>'
+                if len(seen) == 6: break
+        except Exception as e:
+            print(f"news failed ({e})", file=sys.stderr)
+        cols += f'<div><h4>{head}</h4><ul>{li or "<li class=muted>No headlines reached us today.</li>"}</ul></div>'
+    return f'<section class="news"><h3>The Wider World</h3><div class="cols">{cols}</div><p class="muted">Headlines link to their publishers.</p></section>'
+
+def nav(root):
+    return f'<nav class="nav"><a href="{root}">Today&rsquo;s edition</a><a href="{root}archive/">Archive</a></nav>'
+
+def save(path, text):
+    with open(path, "w", encoding="utf-8") as f: f.write(text)
+
+def archive_page(eds):
+    css = re.search(r"<style>.*?</style>", TEMPLATE, re.S).group(0)
+    fonts = re.search(r'<link href="https://fonts[^>]*>', TEMPLATE).group(0)
+    rows = "".join(f'<li><a href="{e["date"]}.html"><b>No. {e["no"]}</b>, {e["date"]}</a>. Lead: {esc(e["lead"])}</li>'
+                   for e in sorted(eds, key=lambda e: e["date"], reverse=True))
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+            f'<title>Archive, {esc(TITLE)}</title>{fonts}{css}</head><body><div class="page"><header><h1>{esc(TITLE)}</h1>'
+            f'<p class="sub">The archive of past editions</p>{nav("../")}</header><ul class="arch">{rows}</ul></div></body></html>')
+
 def main():
     today = dt.datetime.now(dt.timezone.utc).date()
     papers = fetch_papers()
@@ -161,6 +262,7 @@ def main():
     n = today.day
     suffix = "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     lex = LEXICON[today.toordinal() % len(LEXICON)]
+    prob = PROBLEMS[today.toordinal() % len(PROBLEMS)]
     chips = '<button class="chip on" data-tag="">All</button>' + "".join(
         f'<button class="chip" data-tag="{esc(t)}">{esc(t)}</button>' for t in TAGS)
     values = {
@@ -170,11 +272,23 @@ def main():
         "COUNT": str(len(papers)), "CHIPS": chips, "LEAD": lead(papers[0]),
         "PAPERS": "".join(card(p) for p in papers[1:]), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
+        "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
+        "NEWS": news_html(), "DIAGRAM": diagram_html(papers),
     }
-    page = TEMPLATE
+    base = TEMPLATE
     for k, v in values.items():
-        page = page.replace("{{" + k + "}}", v)
-    open("index.html", "w", encoding="utf-8").write(page)
+        base = base.replace("{{" + k + "}}", v)
+    os.makedirs("archive", exist_ok=True)
+    stamp = today.isoformat()
+    save("index.html", base.replace("{{NAV}}", nav("./")))
+    save(f"archive/{stamp}.html", base.replace("{{NAV}}", nav("../")))
+    try:
+        with open("archive/editions.json", encoding="utf-8") as f: eds = json.load(f)
+    except Exception:
+        eds = []
+    eds = [e for e in eds if e["date"] != stamp] + [{"date": stamp, "no": values["NO"], "lead": papers[0]["title"]}]
+    save("archive/editions.json", json.dumps(eds, ensure_ascii=False))
+    save("archive/index.html", archive_page(eds))
     print("Edition printed:", len(papers), "papers")
 
 TEMPLATE = r"""<!doctype html>
@@ -221,18 +335,28 @@ table{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:.95rem}
 th,td{padding:.2rem .3rem;border-bottom:1px dotted var(--soft);text-align:right}th:first-child,td:first-child{text-align:left}
 .muted{color:var(--soft);font-size:.85rem;font-style:italic}.cup{margin:.4rem 0}
 footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text-align:center;font-size:.9rem;color:var(--soft)}
+.nav{display:flex;justify-content:center;gap:2rem;margin:.5rem 0 0;font-style:italic}
+.diagram{border-bottom:4px double var(--ink);padding:1rem 0;text-align:center}
+.diagram figure{margin:0}.diagram img{max-width:100%;max-height:26rem;background:#fffdf5;padding:.6rem;border:1px solid var(--ink)}
+.diagram figcaption{max-width:46rem;margin:.6rem auto 0;font-size:.95rem;text-align:left}
+.news{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.news h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}
+.news .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:2rem}.news h4{margin:0 0 .4rem;font-family:"Playfair Display",serif}
+.news ul,.arch{padding:0;list-style:none}.news li,.arch li{padding:.4rem 0;border-bottom:1px dotted var(--soft)}
 @media(max-width:860px){.grid{grid-template-columns:1fr}.page{margin:0;box-shadow:none}}
 </style></head><body><div class="page">
 <header><h1>{{TITLE}}</h1><p class="sub">Dispatches from the frontiers of semigroup theory</p>
-<div class="bar"><span>Vol. I, No. {{NO}}</span><span>{{DATE}}</span><span>Price one penny</span></div></header>
+<div class="bar"><span>Vol. I, No. {{NO}}</span><span>{{DATE}}</span><span>Price one penny</span></div>{{NAV}}</header>
 {{LEAD}}
+{{DIAGRAM}}
 <div class="grid"><main>
 <div class="tools"><input id="q" type="search" placeholder="Search today's dispatches" aria-label="Search dispatches">{{CHIPS}}</div>
 <div class="papers">{{PAPERS}}</div><p id="none" class="muted" hidden>No dispatch matches. Try another word or choose All.</p>
 </main><aside class="side">
 <section><h3>The Coffee Exchange</h3>{{COFFEE}}</section>
+<section><h3>Problem of the Day</h3><p><b>{{PROB_T}}.</b> {{PROB_Q}}</p><details><summary>Show the solution</summary><p>{{PROB_A}}</p></details></section>
 <section><h3>Lexicon of the Day</h3><p><b>{{LEX_T}}.</b> {{LEX_D}}</p></section>
 </aside></div>
+{{NEWS}}
 <footer><p>{{DEDICATION}}</p><p>{{COUNT}} recent papers gathered from arXiv. Thank you to arXiv for use of its open access interoperability.</p></footer>
 </div><script>
 const q=document.getElementById('q'),chips=[...document.querySelectorAll('.chip')],papers=[...document.querySelectorAll('.paper')];let tag='';
