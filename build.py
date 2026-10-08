@@ -195,28 +195,42 @@ class Figs(HTMLParser):
 KEYS = ["cayley graph", "diagram", "hasse", "egg-box", "eggbox", "automaton", "graph", "lattice", "quiver", "tree", "picture"]
 
 def diagram_html(papers):
-    best = None
-    for p in papers[:10]:
+    best, pages, nfig = None, 0, 0
+    for p in papers[:25]:
         idv = p["url"].rsplit("/abs/", 1)[-1]
         txt = get(f"https://arxiv.org/html/{idv}", tries=1)
         if not txt: continue
+        pages += 1
         fp = Figs()
         try: fp.feed(txt)
         except Exception: continue
         base = urllib.parse.urljoin("https://arxiv.org", fp.base) if fp.base else f"https://arxiv.org/html/{idv}/"
         for f in fp.figs:
+            nfig += 1
             imgs = [s for s in f["imgs"] if re.search(r"\.(png|jpe?g|gif|svg|webp)(\?|$)", s, re.I)]
             cap = re.sub(r"\s+", " ", f["cap"]).strip()
             score = sum(k in cap.lower() for k in KEYS)
-            if imgs and score and (best is None or score > best[0]):
+            if imgs and (best is None or score > best[0]):
                 best = (score, p, urllib.parse.urljoin(base, imgs[0]), cap)
+        if best and best[0] >= 2: break
         time.sleep(1)
-    if not best:
-        return '<section class="diagram"><p class="muted">No diagram turned up in today\'s papers. One will appear as soon as a recent paper offers one.</p></section>'
-    _, p, src, cap = best
-    return (f'<section class="diagram"><figure><img src="{esc(src)}" alt="{esc(cap[:150])}" loading="lazy">'
-            f'<figcaption><b>The Diagram of the Day.</b> {esc(cap[:260])} From <a href="{p["url"]}">{esc(p["title"])}</a>, '
-            f'{byline(p)}. Image courtesy of the authors, via arXiv.</figcaption></figure></section>')
+    print(f"diagram scan: {pages} pages, {nfig} figures, found={bool(best)}", file=sys.stderr)
+    os.makedirs("archive", exist_ok=True)
+    path, fresh = "archive/diagram.json", True
+    if best:
+        _, p, src, cap = best
+        d = {"src": src, "cap": cap[:260], "title": p["title"], "url": p["url"], "by": byline(p)}
+        save(path, json.dumps(d, ensure_ascii=False))
+    else:
+        fresh = False
+        try:
+            with open(path, encoding="utf-8") as f: d = json.load(f)
+        except Exception:
+            return '<section class="diagram"><p class="muted">No diagram turned up in today\'s papers. One will appear as soon as a recent paper offers one.</p></section>'
+    label = "The Diagram of the Day." if fresh else "The Diagram from a Recent Edition."
+    return (f'<section class="diagram"><figure><img src="{esc(d["src"])}" alt="{esc(d["cap"][:150])}" loading="lazy">'
+            f'<figcaption><b>{label}</b> {esc(d["cap"])} From <a href="{d["url"]}">{esc(d["title"])}</a>, '
+            f'{d["by"]}. Image courtesy of the authors, via arXiv.</figcaption></figure></section>')
 
 def news_html():
     qs = [("Mathematics and AI", 'mathematics ("artificial intelligence" OR AI) when:14d'),
