@@ -1,0 +1,137 @@
+[
+  {
+    "signature": "A Perplexed Idempotent, of Rees Matrix Terrace",
+    "subject": "On squaring",
+    "body": [
+      "Sir, whenever I am squared I come back exactly as I was, so that $e^2 = e$. My friends call this stability. My mother calls it stubbornness.",
+      "Which of them is right? I should like to know before the family reunion."
+    ],
+    "reply": "Madam, both. In semigroup theory these are the same virtue."
+  },
+  {
+    "signature": "A Worried Zero, of Absorbing Lane",
+    "subject": "Attention at last",
+    "body": [
+      "Sir, everything I multiply becomes me. I did not ask for this. Guests arrive as themselves and leave as zero, and I am beginning to feel the party depends on nobody noticing.",
+      "Is it too late to become the identity?"
+    ],
+    "reply": "Madam, the identity makes friends and you keep them. Both are respectable roles."
+  },
+  {
+    "signature": "An Inverse, Seeking My Other Half",
+    "subject": "A question of uniqueness",
+    "body": [
+      "Sir, I was told that in an inverse semigroup each element has exactly one inverse. I find this romantic, and also a little limiting.",
+      "Do other kinds of semigroups allow more options?"
+    ],
+    "reply": "Madam, regular semigroups do. Whether more options means more happiness we leave to the correspondence columns."
+  },
+  {
+    "signature": "A Weary Generator",
+    "subject": "Sole responsibility",
+    "body": [
+      "Sir, I generate everyone in this semigroup by myself. Every element is a power of me, and no one has once said thank you.",
+      "Is this what it means to be cyclic?"
+    ],
+    "reply": "Sir, yes. You may take comfort that the structure has a very short family tree."
+  },
+  {
+    "signature": "A Non-Commuting Couple, of Left Bank",
+    "subject": "Does order matter?",
+    "body": [
+      "Sir, when my partner and I walk in, I go first and he follows, and the result is $ab$. When he goes first it is $ba$, and the results differ.",
+      "We wish to know whether to stop fighting about doors."
+    ],
+    "reply": "Madam, order matters. Please settle it by agreement, as the associative law allows you to regroup but not to reorder."
+  },
+  {
+    "signature": "A Finite Basis Sceptic",
+    "subject": "Too many identities",
+    "body": [
+      "Sir, I am told that some semigroups satisfy infinitely many identities that cannot all be reduced to a finite list.",
+      "I find this suspicious. Surely someone could have written them down by now?"
+    ],
+    "reply": "Sir, some have been proved to resist it. Writing them down is a longer task than one expects."
+  },
+  {
+    "signature": "A Nilpotent, Feeling Powerless",
+    "subject": "Running out of strength",
+    "body": [
+      "Sir, I am told that some power of me is zero. I do not know which power, and I do not wish to find out.",
+      "How should one prepare?"
+    ],
+    "reply": "Sir, with a calendar. It is the index of nilpotency, and it is finite."
+  },
+  {
+    "signature": "An Ideal Reader, of Two-Sided Crescent",
+    "subject": "On being absorbed",
+    "body": [
+      "Sir, I am an ideal, and anything that touches me stays inside. Visitors say it is charming, and also that it is difficult to leave.",
+      "Am I too welcoming?"
+    ],
+    "reply": "Madam, no. Closure under outside influence is the whole point of your profession."
+  },
+  {
+    "signature": "A Frobenius Coin Collector",
+    "subject": "A shortage of change",
+    "body": [
+      "Sir, I carry only coins worth 3 and 5. Shopkeepers keep telling me the exact amount I cannot pay.",
+      "What is the largest sum I can never make?"
+    ],
+    "reply": "Sir, seven. For coprime coins the largest is $ab - a - b$, and $3 \\cdot 5 - 3 - 5 = 7$."
+  },
+  {
+    "signature": "A Monoid, Missing Her Identity",
+    "subject": "Lost and found",
+    "body": [
+      "Sir, I was a semigroup until someone adjoined an identity to me, and I now have a number to be returned to when everyone forgets who I am.",
+      "Is this progress?"
+    ],
+    "reply": "Madam, it is a monoid, and yes, it is progress. Please remember to bring it to the reunion."
+  },
+  {
+    "signature": "A Band, Rather Square",
+    "subject": "Everything the same",
+    "body": [
+      "Sir, every element of my family satisfies $x^2 = x$. Visitors find us repetitive.",
+      "We prefer to call it consistent. May we hope for your support?"
+    ],
+    "reply": "Sirs, you have it. Consistency is idempotent, and so is this reply."
+  },
+  {
+    "signature": "A Reader Troubled by Green",
+    "subject": "Too many relations",
+    "body": [
+      "Sir, I am told that Green has several relations, and I cannot keep track of whom to invite.",
+      "How many should I expect at dinner?"
+    ],
+    "reply": "Madam, five, namely $\\mathcal{R}$, $\\mathcal{L}$, $\\mathcal{H}$, $\\mathcal{D}$ and $\\mathcal{J}$. Seat the $\\mathcal{H}$ by the window."
+  },
+  {
+    "signature": "A Subsemigroup in Distress",
+    "subject": "Closed but lonely",
+    "body": [
+      "Sir, I am closed under multiplication, and nobody invites me out. They say I keep to myself.",
+      "Could they be right?"
+    ],
+    "reply": "Sir, they are correct but unfair. Self-containment is a compliment among subsemigroups."
+  },
+  {
+    "signature": "A Grateful Student of Cayley",
+    "subject": "On embeddings",
+    "body": [
+      "Sir, I have been told that every group sits inside a group of permutations, and that semigroups have a similar rule.",
+      "I find this reassuring. It means nobody is truly abstract."
+    ],
+    "reply": "Sir, quite so. Every structure here is secretly a set of maps in disguise."
+  },
+  {
+    "signature": "A Caffeinated Commutator, of Espresso Row",
+    "subject": "On morning efficiency",
+    "body": [
+      "Sir, I commute only after my first coffee, and the second makes me nilpotent.",
+      "Is this a normal pattern for a working mathematician?"
+    ],
+    "reply": "Sir, it is the usual one. The market price of the beans is printed a few columns away."
+  }
+]
