@@ -1,7 +1,9 @@
 name: Print today's edition
 on:
   schedule:
-    - cron: "30 5 * * *"   # every day at 05:30 UTC
+      schedule:
+    - cron: "17 4 * * *"
+    - cron: "43 7 * * *"   # every day at 04:17 UTC or 07:43 UTC
   workflow_dispatch:        # adds a manual "Run workflow" button
 permissions:
   contents: write
