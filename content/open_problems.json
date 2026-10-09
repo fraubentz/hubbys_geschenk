@@ -1,0 +1,58 @@
+[
+  {
+    "title": "The Černý conjecture",
+    "statement": "Does every synchronizing automaton with $n$ states have a synchronizing word of length at most $(n-1)^2$?",
+    "background": "Posed in the 1960s. Known upper bounds are roughly cubic in $n$, so the quadratic bound is unproved in general.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://en.wikipedia.org/wiki/%C4%8Cern%C3%BD_conjecture"
+  },
+  {
+    "title": "Wilf's conjecture",
+    "statement": "Let $S$ be a numerical semigroup with conductor $c$, embedding dimension $e$, and let $l$ be the number of elements of $S$ below $c$. Is it always true that $c \\le e \\cdot l$?",
+    "background": "Proposed by Herbert Wilf in 1978. It is proved in many special cases, but not in general.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://en.wikipedia.org/wiki/Numerical_semigroup"
+  },
+  {
+    "title": "The finite basis problem for finite semigroups",
+    "statement": "Is there an algorithm that decides whether a given finite semigroup has a finite basis for its identities?",
+    "background": "The analogous question for finite algebras in general is known to be undecidable. For finite semigroups it is open.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://arxiv.org/abs/2610.02500v2"
+  },
+  {
+    "title": "The generalized star-height problem",
+    "statement": "Does every regular language have generalized star height at most one?",
+    "background": "Generalized star height allows complementation as well as union, product and star. The question of whether the height is bounded by one has resisted proof or disproof.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://en.wikipedia.org/wiki/Star_height_problem"
+  },
+  {
+    "title": "Decidability of Krohn-Rhodes complexity",
+    "statement": "Is there an algorithm that computes the Krohn-Rhodes complexity of a given finite semigroup?",
+    "background": "The complexity is the least number of group levels needed in a decomposition. Decidability is known only for the lowest levels.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://en.wikipedia.org/wiki/Krohn%E2%80%93Rhodes_theory"
+  },
+  {
+    "title": "The word problem for one-relation semigroups",
+    "statement": "Is the word problem decidable for every semigroup presented by a single defining relation?",
+    "background": "Adjan solved the case of one-relator monoids whose relation sets a word equal to the identity. The general case is a long-standing open question.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://en.wikipedia.org/wiki/Word_problem_(mathematics)"
+  },
+  {
+    "title": "The Bras-Amorós conjecture",
+    "statement": "Let $n_g$ be the number of numerical semigroups of genus $g$. Is it true that $n_{g+2} \\ge n_{g+1} + n_g$ for every $g$?",
+    "background": "The counts grow roughly like the Fibonacci numbers. Asymptotic growth has been established, but the exact inequality for all $g$ is the open part.",
+    "status": "open",
+    "as_of": "2026",
+    "link": "https://en.wikipedia.org/wiki/Numerical_semigroup"
+  }
+]
