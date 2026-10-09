@@ -1,0 +1,66 @@
+[
+ {
+  "month": 8,
+  "day": 16,
+  "year": 1821,
+  "headline": "Birth of Arthur Cayley",
+  "text": "The English mathematician behind Cayley's theorem, which shows that every group embeds in a group of permutations. The same idea is the model for the Cayley-type and Vagner-Preston embeddings used for semigroups.",
+  "link": "https://en.wikipedia.org/wiki/Arthur_Cayley"
+ },
+ {
+  "month": 9,
+  "day": 3,
+  "year": 1814,
+  "headline": "Birth of James Joseph Sylvester",
+  "text": "Sylvester is credited with the formula for the two-generator case of the coin problem: for coprime $a$ and $b$, the largest number that cannot be written as a non-negative combination of them is $ab - a - b$.",
+  "link": "https://en.wikipedia.org/wiki/James_Joseph_Sylvester"
+ },
+ {
+  "month": 9,
+  "day": 13,
+  "year": 1913,
+  "headline": "Birth of Samuel Eilenberg",
+  "text": "A founder of category theory and author of the standard work on automata, languages and machines. The Eilenberg correspondence links varieties of regular languages with pseudovarieties of finite semigroups.",
+  "link": "https://en.wikipedia.org/wiki/Samuel_Eilenberg"
+ },
+ {
+  "month": 10,
+  "day": 24,
+  "year": 1920,
+  "headline": "Birth of Marcel-Paul Schützenberger",
+  "text": "A French mathematician who worked on formal languages, automata and combinatorics on words. His theorem on star-free languages was one of the first links between finite semigroups and automata.",
+  "link": "https://en.wikipedia.org/wiki/Marcel-Paul_Sch%C3%BCtzenberger"
+ },
+ {
+  "month": 10,
+  "day": 26,
+  "year": 1849,
+  "headline": "Birth of Ferdinand Georg Frobenius",
+  "text": "His name is attached to the Frobenius number of a numerical semigroup, the largest integer not in the semigroup. He is better known for work on groups, matrices and representation theory.",
+  "link": "https://en.wikipedia.org/wiki/Ferdinand_Georg_Frobenius"
+ },
+ {
+  "month": 5,
+  "day": 29,
+  "year": 1918,
+  "headline": "Birth of David Rees",
+  "text": "A British mathematician whose 1940 work on semigroups introduced the Rees matrix construction, one of the basic tools for describing completely simple and completely 0-simple semigroups.",
+  "link": "https://en.wikipedia.org/wiki/David_Rees_(mathematician)"
+ },
+ {
+  "month": 7,
+  "day": 11,
+  "year": 1908,
+  "headline": "Birth of Alfred H. Clifford",
+  "text": "An American mathematician who, with G. B. Preston, wrote the two-volume work on the algebraic theory of semigroups. It long served as the field's standard reference.",
+  "link": "https://en.wikipedia.org/wiki/Alfred_H._Clifford"
+ },
+ {
+  "month": 6,
+  "day": 13,
+  "year": 1931,
+  "headline": "Birth of Herbert Wilf",
+  "text": "A combinatorialist and the namesake of Wilf's conjecture on numerical semigroups, proposed in 1978. He also wrote widely read books on generating functions and algorithms.",
+  "link": "https://en.wikipedia.org/wiki/Herbert_Wilf"
+ }
+]
