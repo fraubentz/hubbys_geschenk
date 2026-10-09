@@ -196,7 +196,8 @@ KEYS = ["cayley graph", "diagram", "hasse", "egg-box", "eggbox", "automaton", "g
 
 def diagram_html(papers):
     best, pages, nfig = None, 0, 0
-    for p in papers[:25]:
+    off = dt.datetime.now(dt.timezone.utc).date().toordinal() % max(1, len(papers))
+    for p in (papers[off:] + papers[:off])[:25]:
         idv = p["url"].rsplit("/abs/", 1)[-1]
         txt = get(f"https://arxiv.org/html/{idv}", tries=1)
         if not txt: continue
@@ -226,7 +227,7 @@ def diagram_html(papers):
         try:
             with open(path, encoding="utf-8") as f: d = json.load(f)
         except Exception:
-            return '<section class="diagram"><p class="muted">No diagram turned up in today\'s papers. One will appear as soon as a recent paper offers one.</p></section>'
+            return f'<section class="diagram"><p class="muted">No diagram turned up in today&rsquo;s papers (checked {pages} pages and {nfig} figures). One will appear as soon as a recent paper offers one.</p></section>'
     label = "The Diagram of the Day." if fresh else "The Diagram from a Recent Edition."
     return (f'<section class="diagram"><figure><img src="{esc(d["src"])}" alt="{esc(d["cap"][:150])}" loading="lazy">'
             f'<figcaption><b>{label}</b> {esc(d["cap"])} From <a href="{d["url"]}">{esc(d["title"])}</a>, '
@@ -268,6 +269,10 @@ def archive_page(eds):
             f'<title>Archive, {esc(TITLE)}</title>{fonts}{css}</head><body><div class="page"><header><h1>{esc(TITLE)}</h1>'
             f'<p class="sub">The archive of past editions</p>{nav("../")}</header><ul class="arch">{rows}</ul></div></body></html>')
 
+def wide_pool(recent):
+    time.sleep(3)  # be polite to the arXiv API
+    return fetch_papers(100) or recent
+
 def main():
     today = dt.datetime.now(dt.timezone.utc).date()
     papers = fetch_papers()
@@ -287,7 +292,7 @@ def main():
         "PAPERS": "".join(card(p) for p in papers[1:]), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
-        "NEWS": news_html(), "DIAGRAM": diagram_html(papers),
+        "NEWS": news_html(), "DIAGRAM": diagram_html(wide_pool(papers)),
     }
     base = TEMPLATE
     for k, v in values.items():
