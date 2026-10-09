@@ -172,25 +172,45 @@ def coffee_html():
     out += '<p class="muted">Wholesale green-bean futures, last close. Not what the café charges you.</p>'
     return out
 
+VOID = {"br", "img", "hr", "input", "meta", "link", "wbr"}
+SAFE = lambda t: re.sub(r"\son\w+=(\"[^\"]*\"|'[^']*')", "", t)
+
 class Figs(HTMLParser):
     def __init__(self):
-        super().__init__(); self.figs = []; self.cur = None; self.depth = 0; self.cap = False; self.base = None
+        super().__init__(); self.figs = []; self.cur = None; self.depth = 0; self.cap = False
+        self.base = None; self.sv = None; self.nest = 0; self.skip = 0
     def handle_starttag(self, tag, a):
         a = dict(a)
+        if self.sv is not None or (tag == "svg" and self.depth):
+            if self.sv is None: self.sv, self.nest, self.skip = [], 0, 0
+            if tag not in VOID: self.nest += 1
+            if tag in ("script", "style"): self.skip += 1
+            elif not self.skip: self.sv.append(SAFE(self.get_starttag_text()))
+            return
         if tag == "base" and a.get("href"): self.base = a["href"]
         elif tag == "figure":
-            if self.depth == 0: self.cur = {"imgs": [], "cap": ""}
+            if self.depth == 0: self.cur = {"imgs": [], "svgs": [], "cap": ""}
             self.depth += 1
         elif self.depth and tag == "img" and a.get("src") and "ltx_Math" not in (a.get("class") or ""):
             self.cur["imgs"].append(a["src"])
         elif self.depth and tag == "figcaption": self.cap = True
     def handle_endtag(self, tag):
+        if self.sv is not None:
+            if tag not in VOID: self.nest -= 1
+            if tag in ("script", "style"): self.skip -= 1
+            elif not self.skip and tag not in VOID and not (self.sv and self.sv[-1].endswith("/>")):
+                self.sv.append(f"</{tag}>")
+            if self.nest <= 0:
+                self.cur["svgs"].append("".join(self.sv)); self.sv = None
+            return
         if tag == "figcaption": self.cap = False
         elif tag == "figure" and self.depth:
             self.depth -= 1
             if self.depth == 0: self.figs.append(self.cur)
     def handle_data(self, d):
-        if self.cap and self.cur is not None: self.cur["cap"] += d
+        if self.sv is not None:
+            if not self.skip: self.sv.append(esc(d))
+        elif self.cap and self.cur is not None: self.cur["cap"] += d
 
 KEYS = ["cayley graph", "diagram", "hasse", "egg-box", "eggbox", "automaton", "graph", "lattice", "quiver", "tree", "picture"]
 
@@ -208,19 +228,21 @@ def diagram_html(papers):
         base = urllib.parse.urljoin("https://arxiv.org", fp.base) if fp.base else f"https://arxiv.org/html/{idv}/"
         for f in fp.figs:
             nfig += 1
-            imgs = [s for s in f["imgs"] if re.search(r"\.(png|jpe?g|gif|svg|webp)(\?|$)", s, re.I)]
+            imgs = [s for s in f["imgs"] if (s.startswith("data:image/") and len(s) < 300000) or re.search(r"\.(png|jpe?g|gif|svg|webp)(\?|$)", s, re.I)]
+            svgs = [s for s in f["svgs"] if 400 < len(s) < 200000]
             cap = re.sub(r"\s+", " ", f["cap"]).strip()
             score = sum(k in cap.lower() for k in KEYS)
-            if imgs and (best is None or score > best[0]):
-                best = (score, p, urllib.parse.urljoin(base, imgs[0]), cap)
+            vis = ("img", urllib.parse.urljoin(base, imgs[0])) if imgs else ("svg", svgs[0]) if svgs else None
+            if vis and (best is None or score > best[0]):
+                best = (score, p, vis, cap)
         if best and best[0] >= 2: break
         time.sleep(1)
     print(f"diagram scan: {pages} pages, {nfig} figures, found={bool(best)}", file=sys.stderr)
     os.makedirs("archive", exist_ok=True)
     path, fresh = "archive/diagram.json", True
     if best:
-        _, p, src, cap = best
-        d = {"src": src, "cap": cap[:260], "title": p["title"], "url": p["url"], "by": byline(p)}
+        _, p, (kind, payload), cap = best
+        d = {"kind": kind, "src": payload, "cap": cap[:260], "title": p["title"], "url": p["url"], "by": byline(p)}
         save(path, json.dumps(d, ensure_ascii=False))
     else:
         fresh = False
@@ -229,7 +251,9 @@ def diagram_html(papers):
         except Exception:
             return f'<section class="diagram"><p class="muted">No diagram turned up in today&rsquo;s papers (checked {pages} pages and {nfig} figures). One will appear as soon as a recent paper offers one.</p></section>'
     label = "The Diagram of the Day." if fresh else "The Diagram from a Recent Edition."
-    return (f'<section class="diagram"><figure><img src="{esc(d["src"])}" alt="{esc(d["cap"][:150])}" loading="lazy">'
+    vis = (f'<div class="svgbox">{d["src"]}</div>' if d.get("kind") == "svg"
+           else f'<img src="{esc(d["src"])}" alt="{esc(d["cap"][:150])}" loading="lazy">')
+    return (f'<section class="diagram"><figure>{vis}'
             f'<figcaption><b>{label}</b> {esc(d["cap"])} From <a href="{d["url"]}">{esc(d["title"])}</a>, '
             f'{d["by"]}. Image courtesy of the authors, via arXiv.</figcaption></figure></section>')
 
@@ -357,6 +381,7 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 .nav{display:flex;justify-content:center;gap:2rem;margin:.5rem 0 0;font-style:italic}
 .diagram{border-bottom:4px double var(--ink);padding:1rem 0;text-align:center}
 .diagram figure{margin:0}.diagram img{max-width:100%;max-height:26rem;background:#fffdf5;padding:.6rem;border:1px solid var(--ink)}
+.svgbox{background:#fffdf5;padding:.6rem;border:1px solid var(--ink);overflow-x:auto}.svgbox svg{display:block;margin:auto;max-width:100%;height:auto;max-height:26rem}
 .diagram figcaption{max-width:46rem;margin:.6rem auto 0;font-size:.95rem;text-align:left}
 .news{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.news h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}
 .news .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:2rem}.news h4{margin:0 0 .4rem;font-family:"Playfair Display",serif}
