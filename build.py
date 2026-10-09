@@ -293,6 +293,65 @@ def archive_page(eds):
             f'<title>Archive, {esc(TITLE)}</title>{fonts}{css}</head><body><div class="page"><header><h1>{esc(TITLE)}</h1>'
             f'<p class="sub">The archive of past editions</p>{nav("../")}</header><ul class="arch">{rows}</ul></div></body></html>')
 
+WINDOW = 30   # On This Day: show the nearest anniversary within this many days
+
+def load(name):
+    try:
+        with open(f"content/{name}.json", encoding="utf-8") as f: data = json.load(f)
+        if not isinstance(data, list): raise ValueError("not a list")
+        return data
+    except Exception as e:
+        print(f"content/{name}.json unusable ({e})", file=sys.stderr)
+        return []
+
+def clean(e, key, maxw, req=True):
+    s = e.get(key, "") if isinstance(e, dict) else ""
+    if isinstance(s, str) and len(s.split()) <= maxw and (s.strip() or not req): return s.strip()
+    return None
+
+def more(e):
+    u = e.get("link", "")
+    return f' <a class="more" rel="noopener" href="{esc(u)}">Read more</a>' if isinstance(u, str) and u.startswith("https://") else ""
+
+def otd_html(today):
+    best = None
+    for e in load("on_this_day"):
+        h, t = clean(e, "headline", 15), clean(e, "text", 60)
+        try:
+            dist = min(abs((dt.date(y, e["month"], e["day"]) - today).days) for y in (today.year - 1, today.year, today.year + 1))
+        except Exception:
+            continue
+        if h and t and dist <= WINDOW and (best is None or dist < best[0]): best = (dist, e, h, t)
+    if not best: return ""
+    dist, e, h, t = best
+    when = "Today" if dist == 0 else f"Nearest anniversary: {e['day']} {dt.date(2001, e['month'], 1):%B}"
+    return (f'<section><h3>On This Day</h3><p><b>{esc(h)}</b> ({esc(str(e.get("year", "")))}). {esc(t)}{more(e)}</p>'
+            f'<p class="muted">{when}.</p></section>')
+
+def corner_html(today):
+    items = [e for e in load("open_problems") if clean(e, "title", 15) and clean(e, "statement", 100)]
+    if not items: return ""
+    e = items[(today.toordinal() // 7) % len(items)]
+    bg = clean(e, "background", 60, req=False)
+    return (f'<section><h3>The Open Problem Corner</h3><p><b>{esc(clean(e, "title", 15))}.</b> {esc(clean(e, "statement", 100))}</p>'
+            + (f'<p>{esc(bg)}</p>' if bg else "")
+            + f'<p class="muted">Status: {esc(str(e.get("status", "open")))}, as of {esc(str(e.get("as_of", "")))}.{more(e)}</p></section>')
+
+def letters_html(today):
+    items = []
+    for e in load("letters"):
+        body = e.get("body") if isinstance(e, dict) else None
+        if (isinstance(body, list) and 0 < len(body) <= 3 and all(isinstance(p, str) for p in body)
+                and sum(len(p.split()) for p in body) <= 120 and clean(e, "signature", 12) and clean(e, "subject", 15)):
+            items.append(e)
+    if not items: return ""
+    e = items[(today.toordinal() // 3) % len(items)]
+    rep = clean(e, "reply", 40, req=False)
+    return ('<section class="letters"><h3>Letters to the Editor</h3><article>'
+            f'<h4>{esc(clean(e, "subject", 15))}</h4>' + "".join(f"<p>{esc(p)}</p>" for p in e["body"])
+            + f'<p class="sig">{esc(clean(e, "signature", 12))}</p>'
+            + (f'<p class="reply"><i>The Editor replies.</i> {esc(rep)}</p>' if rep else "") + '</article></section>')
+
 def wide_pool(recent):
     time.sleep(3)  # be polite to the arXiv API
     return fetch_papers(100) or recent
@@ -316,7 +375,7 @@ def main():
         "PAPERS": "".join(card(p) for p in papers[1:]), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
-        "NEWS": news_html(), "DIAGRAM": diagram_html(wide_pool(papers)),
+        "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(wide_pool(papers)),
     }
     base = TEMPLATE
     for k, v in values.items():
@@ -378,6 +437,7 @@ table{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:.95rem}
 th,td{padding:.2rem .3rem;border-bottom:1px dotted var(--soft);text-align:right}th:first-child,td:first-child{text-align:left}
 .muted{color:var(--soft);font-size:.85rem;font-style:italic}.cup{margin:.4rem 0}
 footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text-align:center;font-size:.9rem;color:var(--soft)}
+.letters{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.letters h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}.letters article{max-width:46rem;margin:auto}.letters h4{margin:.2rem 0;font-family:"Playfair Display",serif}.sig{text-align:right;font-style:italic}.reply{border-left:3px solid var(--red);padding-left:.8rem}.more{font-style:italic}
 .nav{display:flex;justify-content:center;gap:2rem;margin:.5rem 0 0;font-style:italic}
 .diagram{border-bottom:4px double var(--ink);padding:1rem 0;text-align:center}
 .diagram figure{margin:0}.diagram img{max-width:100%;max-height:26rem;background:#fffdf5;padding:.6rem;border:1px solid var(--ink)}
@@ -399,7 +459,10 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 <section><h3>The Coffee Exchange</h3>{{COFFEE}}</section>
 <section><h3>Problem of the Day</h3><p><b>{{PROB_T}}.</b> {{PROB_Q}}</p><details><summary>Show the solution</summary><p>{{PROB_A}}</p></details></section>
 <section><h3>Lexicon of the Day</h3><p><b>{{LEX_T}}.</b> {{LEX_D}}</p></section>
+{{OTD}}
+{{CORNER}}
 </aside></div>
+{{LETTERS}}
 {{NEWS}}
 <footer><p>{{DEDICATION}}</p><p>{{COUNT}} recent papers gathered from arXiv. Thank you to arXiv for use of its open access interoperability.</p></footer>
 </div><script>
