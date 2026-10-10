@@ -375,6 +375,23 @@ def letters_html(today):
             + f'<p class="sig">{esc(clean(e, "signature", 12))}</p>'
             + (f'<p class="reply"><i>The Editor replies.</i> {esc(rep)}</p>' if rep else "") + '</article></section>')
 
+def week_html(pool, today):
+    cut = (today - dt.timedelta(days=7)).isoformat()
+    week = [p for p in pool if p["date"] >= cut]
+    if not week: return ""
+    star = max(week, key=lambda p: (len(tags_for(p)), p["date"]))   # touches the most topics
+    au = ", ".join(star["authors"][:8]) + (" et al." if len(star["authors"]) > 8 else "")
+    potw = (f'<section class="potw"><p class="kicker"><i>Paper of the Week</i></p><h3><a href="{star["url"]}">{esc(star["title"])}</a></h3>'
+            f'<p class="by">{esc(au)}. <i>{esc(star["cat"])}, submitted {star["date"]}</i></p><div class="abs">{esc(star["abs"])}</div>'
+            f'<div>{chips_html(star)}</div><p class="muted">Chosen automatically: the paper of the week touching the most semigroup topics.</p></section>')
+    rows = ""
+    for k, ps in [(k, [p for p in week if k in tags_for(p)]) for k in TAGS] + [("Other topics", [p for p in week if not tags_for(p)])]:
+        if ps:
+            rows += (f'<div><h4>{esc(k)} ({len(ps)})</h4><ul>'
+                     + "".join(f'<li><a href="{p["url"]}">{esc(p["title"])}</a></li>' for p in ps[:6])
+                     + ('<li class="muted">and more on arXiv</li>' if len(ps) > 6 else "") + "</ul></div>")
+    return potw + f'<section class="review"><h3>The Week in Review</h3><p class="muted">{len(week)} papers in the past seven days. A paper can appear under several topics.</p><div class="cols">{rows}</div></section>'
+
 def wide_pool(recent):
     time.sleep(3)  # be polite to the arXiv API
     return fetch_papers(100, patient=False) or recent
@@ -399,6 +416,8 @@ def main():
     prob = PROBLEMS[today.toordinal() % len(PROBLEMS)]
     chips = '<button class="chip on" data-tag="">All</button>' + "".join(
         f'<button class="chip" data-tag="{esc(t)}">{esc(t)}</button>' for t in TAGS)
+    pool = papers if stale else wide_pool(papers)
+    weekend = today.weekday() >= 5
     values = {
         "TITLE": esc(TITLE), "DEDICATION": esc(DEDICATION),
         "NO": str(max(1, (today - FIRST_EDITION).days + 1)),
@@ -407,7 +426,8 @@ def main():
         "PAPERS": "".join(card(p) for p in papers[1:]), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
-        "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(papers if stale else wide_pool(papers)),
+        "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(pool), "WEEKEND": week_html(pool, today) if weekend else "",
+        "PRICE": "Weekend Edition, price twopence" if weekend else "Price one penny",
     }
     base = TEMPLATE
     for k, v in values.items():
@@ -470,6 +490,7 @@ th,td{padding:.2rem .3rem;border-bottom:1px dotted var(--soft);text-align:right}
 .muted{color:var(--soft);font-size:.85rem;font-style:italic}.cup{margin:.4rem 0}
 footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text-align:center;font-size:.9rem;color:var(--soft)}
 .letters{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.letters h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}.letters article{max-width:46rem;margin:auto}.letters h4{margin:.2rem 0;font-family:"Playfair Display",serif}.sig{text-align:right;font-style:italic}.reply{border-left:3px solid var(--red);padding-left:.8rem}.more{font-style:italic}
+.potw,.review{border-bottom:4px double var(--ink);padding:1rem 0}.potw h3{font-size:1.6rem;margin:.2rem 0}.review h3{text-align:center;font-size:1.4rem;margin:0 0 .3rem}.review>.muted{text-align:center}.review .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.5rem}.review h4{margin:0 0 .3rem;font-family:"Playfair Display",serif}.review ul{padding:0;list-style:none}.review li{padding:.25rem 0;border-bottom:1px dotted var(--soft)}
 .nav{display:flex;justify-content:center;gap:2rem;margin:.5rem 0 0;font-style:italic}
 .diagram{border-bottom:4px double var(--ink);padding:1rem 0;text-align:center}
 .diagram figure{margin:0}.diagram img{max-width:100%;max-height:26rem;background:#fffdf5;padding:.6rem;border:1px solid var(--ink)}
@@ -481,8 +502,9 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 @media(max-width:860px){.grid{grid-template-columns:1fr}.page{margin:0;box-shadow:none}}
 </style></head><body><div class="page">
 <header><h1>{{TITLE}}</h1><p class="sub">Dispatches from the frontiers of semigroup theory</p>
-<div class="bar"><span>Vol. I, No. {{NO}}</span><span>{{DATE}}</span><span>Price one penny</span></div>{{NAV}}</header>
+<div class="bar"><span>Vol. I, No. {{NO}}</span><span>{{DATE}}</span><span>{{PRICE}}</span></div>{{NAV}}</header>
 {{LEAD}}
+{{WEEKEND}}
 {{DIAGRAM}}
 <div class="grid"><main>
 <div class="tools"><input id="q" type="search" placeholder="Search today's dispatches" aria-label="Search dispatches">{{CHIPS}}</div>
