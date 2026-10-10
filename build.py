@@ -365,9 +365,18 @@ def wide_pool(recent):
 
 def main():
     today = dt.datetime.now(dt.timezone.utc).date()
-    papers = fetch_papers()
-    if not papers:
-        sys.exit("arXiv unreachable: keeping the previous edition.")
+    os.makedirs("archive", exist_ok=True)
+    papers, stale = fetch_papers(), False
+    if papers:
+        save("archive/papers.json", json.dumps(papers, ensure_ascii=False))
+    else:  # arXiv refused us: reuse the last papers we managed to fetch
+        try:
+            with open("archive/papers.json", encoding="utf-8") as f: papers = json.load(f)
+            stale = bool(papers)
+        except Exception:
+            pass
+        if not papers:
+            sys.exit("arXiv unreachable and nothing saved: keeping the previous edition.")
     n = today.day
     suffix = "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     lex = LEXICON[today.toordinal() % len(LEXICON)]
@@ -378,11 +387,11 @@ def main():
         "TITLE": esc(TITLE), "DEDICATION": esc(DEDICATION),
         "NO": str(max(1, (today - FIRST_EDITION).days + 1)),
         "DATE": f"{today:%A}, the {n}{suffix} of {today:%B}, {today:%Y}",
-        "COUNT": str(len(papers)), "CHIPS": chips, "LEAD": lead(papers[0]),
+        "COUNT": str(len(papers)), "STALE": " arXiv was not answering today, so these dispatches are from our last successful visit." if stale else "", "CHIPS": chips, "LEAD": lead(papers[0]),
         "PAPERS": "".join(card(p) for p in papers[1:]), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
-        "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(wide_pool(papers)),
+        "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(papers if stale else wide_pool(papers)),
     }
     base = TEMPLATE
     for k, v in values.items():
@@ -471,7 +480,7 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 </aside></div>
 {{LETTERS}}
 {{NEWS}}
-<footer><p>{{DEDICATION}}</p><p>{{COUNT}} recent papers gathered from arXiv. Thank you to arXiv for use of its open access interoperability.</p></footer>
+<footer><p>{{DEDICATION}}</p><p>{{COUNT}} recent papers gathered from arXiv.{{STALE}} Thank you to arXiv for use of its open access interoperability.</p></footer>
 </div><script>
 const q=document.getElementById('q'),chips=[...document.querySelectorAll('.chip')],papers=[...document.querySelectorAll('.paper')];let tag='';
 function apply(){const s=q.value.toLowerCase();let n=0;papers.forEach(p=>{const ok=(!tag||p.dataset.tags.split('|').includes(tag))&&(!s||p.textContent.toLowerCase().includes(s));p.hidden=!ok;n+=ok});document.getElementById('none').hidden=n>0}
