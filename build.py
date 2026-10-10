@@ -8,7 +8,7 @@ from html.parser import HTMLParser
 
 # ---- Things you may want to edit -------------------------------------------
 TITLE = "The Semigroup Gazette"
-DEDICATION = "Printed each morning for the finest semigroup theorist in the house, with love."
+DEDICATION = "Printed each morning for the finest semigroup theorist in the house, with love from Py."
 FIRST_EDITION = dt.date(2026, 10, 9)   # edition No. 1
 CATS = "math.GR math.RA math.CO math.LO math.CT math.AC math.NT cs.FL cs.LO".split()
 TAGS = {
