@@ -3,6 +3,7 @@
 import csv, datetime as dt, html, io, json, os, re, sys, time
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 
 # ---- Things you may want to edit -------------------------------------------
@@ -265,24 +266,39 @@ def diagram_html(papers):
             f'{d["by"]}. Image courtesy of the authors, via arXiv.</figcaption></figure></section>')
 
 def news_html():
-    qs = [("Mathematics and AI", 'mathematics ("artificial intelligence" OR AI) when:14d'),
-          ("Across mathematics", 'mathematicians (theorem OR proof OR prize OR discovery) when:14d')]
-    cols = ""
+    today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    try:
+        with open("archive/news_seen.json", encoding="utf-8") as f: seen = json.load(f)
+    except Exception:
+        seen = {}
+    old = {l for d, ls in seen.items() if d != today for l in ls}   # links shown on earlier days
+    qs = [("Mathematics and AI", 'mathematics ("artificial intelligence" OR AI OR "machine learning") when:7d'),
+          ("New results", 'mathematicians (theorem OR proof OR discovery OR conjecture) when:7d'),
+          ("Mathematics in the world", 'mathematics (mathematician OR olympiad OR "math prize" OR "Fields Medal" OR "Abel Prize" OR "mathematics education") when:7d')]
+    cols, shown = "", []
     for head, q in qs:
         xml = get("https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": "en", "gl": "US", "ceid": "US:en"}), tries=2)
-        li, seen = "", set()
+        items, titles = [], set()
         try:
             for it in ET.fromstring(xml).iter("item"):
-                src = it.findtext("source", "")
-                t = it.findtext("title", "")
+                src, t = it.findtext("source", ""), it.findtext("title", "")
                 if src and t.endswith(" - " + src): t = t[:-len(src) - 3]
-                if t.lower() in seen: continue
-                seen.add(t.lower())
-                li += f'<li><a href="{esc(it.findtext("link", ""))}">{esc(t)}</a> <i>{esc(src)}, {esc(it.findtext("pubDate", "")[:16])}</i></li>'
-                if len(seen) == 6: break
+                if t.lower() in titles: continue
+                titles.add(t.lower())
+                try: when = parsedate_to_datetime(it.findtext("pubDate", ""))
+                except Exception: when = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+                items.append((when, t, it.findtext("link", ""), src))
         except Exception as e:
             print(f"news failed ({e})", file=sys.stderr)
+        items.sort(key=lambda i: i[0], reverse=True)
+        pick = ([i for i in items if i[2] not in old] + [i for i in items if i[2] in old])[:6]   # new stories first
+        shown += [i[2] for i in pick]
+        li = "".join(f'<li><a href="{esc(l)}">{esc(t)}</a> <i>{esc(s)}, {w:%d %b %Y}</i></li>' for w, t, l, s in pick)
         cols += f'<div><h4>{head}</h4><ul>{li or "<li class=muted>No headlines reached us today.</li>"}</ul></div>'
+    seen[today] = shown
+    for d in sorted(seen)[:-14]: del seen[d]
+    os.makedirs("archive", exist_ok=True)
+    save("archive/news_seen.json", json.dumps(seen))
     return f'<section class="news"><h3>The Wider World</h3><div class="cols">{cols}</div><p class="muted">Headlines link to their publishers.</p></section>'
 
 def nav(root):
