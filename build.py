@@ -73,7 +73,7 @@ def get(url, tries=3):
             time.sleep(3 * (i + 1))
     return None
 
-def fetch_papers(n=40):
+def fetch_papers(n=25):
     query = ("(ti:semigroup OR ti:semigroups OR abs:semigroup OR abs:semigroups) AND ("
              + " OR ".join("cat:" + c for c in CATS) + ")")
     q = urllib.parse.urlencode({"search_query": query, "sortBy": "submittedDate",
