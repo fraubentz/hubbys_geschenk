@@ -63,22 +63,29 @@ PROBLEMS = [
 UA = {"User-Agent": "SemigroupGazette/1.0 (personal gift project)"}
 esc = html.escape
 
-def get(url, tries=3):
+def get(url, tries=3, pause=3):
     for i in range(tries):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
                 return r.read().decode("utf-8", "replace")
         except Exception as e:
             print(f"fetch failed ({e}): {url}", file=sys.stderr)
-            time.sleep(3 * (i + 1))
+            time.sleep(pause * (i + 1))
     return None
 
-def fetch_papers(n=25):
+def arxiv_get(q, patient=True):
+    # arXiv sometimes turns away GitHub's servers, so wait and retry, then try the plain-http address
+    for host in ("https://export.arxiv.org", "http://export.arxiv.org"):
+        xml = get(f"{host}/api/query?" + q, tries=3 if patient else 1, pause=15)
+        if xml: return xml
+    return None
+
+def fetch_papers(n=25, patient=True):
     query = ("(ti:semigroup OR ti:semigroups OR abs:semigroup OR abs:semigroups) AND ("
              + " OR ".join("cat:" + c for c in CATS) + ")")
     q = urllib.parse.urlencode({"search_query": query, "sortBy": "submittedDate",
                                 "sortOrder": "descending", "max_results": n})
-    xml = get("https://export.arxiv.org/api/query?" + q)
+    xml = arxiv_get(q, patient)
     if not xml:
         return []
     ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
@@ -354,7 +361,7 @@ def letters_html(today):
 
 def wide_pool(recent):
     time.sleep(3)  # be polite to the arXiv API
-    return fetch_papers(100) or recent
+    return fetch_papers(100, patient=False) or recent
 
 def main():
     today = dt.datetime.now(dt.timezone.utc).date()
