@@ -8,7 +8,7 @@ from html.parser import HTMLParser
 
 # ---- Things you may want to edit -------------------------------------------
 TITLE = "The Semigroup Gazette"
-DEDICATION = "Printed each morning for the finest semigroup theorist in the house, with love from Py."
+DEDICATION = "Printed each morning for the finest semigroup theorist in the house, with love."
 FIRST_EDITION = dt.date(2026, 10, 9)   # edition No. 1
 CATS = "math.GR math.RA math.CO math.LO math.CT math.AC math.NT cs.FL cs.LO".split()
 TAGS = {
@@ -144,14 +144,26 @@ def quote(stq, yah):
     return None
 
 def fx():
-    syms = ",".join(c for _, c, _ in CITIES)
-    for u in (f"https://api.frankfurter.dev/v1/latest?base=USD&symbols={syms}",
-              f"https://api.frankfurter.app/latest?from=USD&to={syms}"):
+    syms = [c for _, c, _ in CITIES]
+    joined = ",".join(syms)
+    sources = [(f"https://api.frankfurter.dev/v1/latest?base=USD&symbols={joined}", lambda j: j["rates"]),
+               (f"https://api.frankfurter.app/latest?from=USD&to={joined}", lambda j: j["rates"]),
+               ("https://open.er-api.com/v6/latest/USD", lambda j: j["rates"]),
+               ("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
+                lambda j: {k.upper(): v for k, v in j["usd"].items()})]
+    for url, pick in sources:
         try:
-            return json.loads(get(u, tries=2))["rates"]
-        except Exception:
-            pass
-    return None
+            rates = pick(json.loads(get(url, tries=2)))
+            if all(c in rates for c in syms):
+                rates = {c: rates[c] for c in syms}
+                save("archive/fx.json", json.dumps(rates))
+                return rates
+        except Exception as e:
+            print(f"rates failed ({e}): {url}", file=sys.stderr)
+    try:   # last good rates
+        with open("archive/fx.json", encoding="utf-8") as f: return json.load(f)
+    except Exception:
+        return None
 
 def coffee_html():
     found = []
@@ -368,7 +380,7 @@ def letters_html(today):
                 and sum(len(p.split()) for p in body) <= 120 and clean(e, "signature", 12) and clean(e, "subject", 15)):
             items.append(e)
     if not items: return ""
-    e = items[(today.toordinal() // 3) % len(items)]
+    e = items[today.toordinal() % len(items)]
     rep = clean(e, "reply", 40, req=False)
     return ('<section class="letters"><h3>Letters to the Editor</h3><article>'
             f'<h4>{esc(clean(e, "subject", 15))}</h4>' + "".join(f"<p>{esc(p)}</p>" for p in e["body"])
