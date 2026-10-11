@@ -236,8 +236,15 @@ KEYS = ["cayley graph", "diagram", "hasse", "egg-box", "eggbox", "automaton", "g
 
 def diagram_html(papers):
     best, pages, nfig = None, 0, 0
+    today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    try:
+        with open("archive/diagram_seen.json", encoding="utf-8") as f: seen = json.load(f)
+    except Exception:
+        seen = {}
+    old = {u for d, u in seen.items() if d != today}   # papers already featured on earlier days
     off = dt.datetime.now(dt.timezone.utc).date().toordinal() % max(1, len(papers))
     for p in (papers[off:] + papers[:off])[:25]:
+        if p["url"] in old: continue
         idv = p["url"].rsplit("/abs/", 1)[-1]
         txt = get(f"https://arxiv.org/html/{idv}", tries=1)
         if not txt: continue
@@ -264,6 +271,9 @@ def diagram_html(papers):
         _, p, (kind, payload), cap = best
         d = {"kind": kind, "src": payload, "cap": cap[:260], "title": p["title"], "url": p["url"], "by": byline(p)}
         save(path, json.dumps(d, ensure_ascii=False))
+        seen[today] = p["url"]
+        for k in sorted(seen)[:-60]: del seen[k]
+        save("archive/diagram_seen.json", json.dumps(seen))
     else:
         fresh = False
         try:
