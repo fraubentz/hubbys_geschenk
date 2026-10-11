@@ -285,9 +285,9 @@ def news_html():
         seen = {}
     old = {l for d, ls in seen.items() if d != today for l in ls}   # links shown on earlier days
     qs = [("Mathematics and AI", 'mathematics ("artificial intelligence" OR AI OR "machine learning") when:7d'),
-          ("New results", 'mathematicians (theorem OR proof OR discovery OR conjecture) when:7d'),
-          ("Mathematics in the world", 'mathematics (mathematician OR olympiad OR "math prize" OR "Fields Medal" OR "Abel Prize" OR "mathematics education") when:7d')]
-    cols, shown = "", []
+          ("New results", 'mathematicians (theorem OR proof OR discovery OR conjecture) -AI -"artificial intelligence" when:7d'),
+          ("Mathematics in the world", 'mathematics (mathematician OR olympiad OR "math prize" OR "Fields Medal" OR "Abel Prize" OR "mathematics education") -AI -"artificial intelligence" when:7d')]
+    cols, shown, used = "", [], set()
     for head, q in qs:
         xml = get("https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": "en", "gl": "US", "ceid": "US:en"}), tries=2)
         items, titles = [], set()
@@ -303,8 +303,10 @@ def news_html():
         except Exception as e:
             print(f"news failed ({e})", file=sys.stderr)
         items.sort(key=lambda i: i[0], reverse=True)
+        items = [i for i in items if i[1].lower() not in used and i[2] not in used]   # nothing twice across the lists
         pick = ([i for i in items if i[2] not in old] + [i for i in items if i[2] in old])[:6]   # new stories first
         shown += [i[2] for i in pick]
+        used.update([i[1].lower() for i in pick] + [i[2] for i in pick])
         li = "".join(f'<li><a href="{esc(l)}">{esc(t)}</a> <i>{esc(s)}, {w:%d %b %Y}</i></li>' for w, t, l, s in pick)
         cols += f'<div><h4>{head}</h4><ul>{li or "<li class=muted>No headlines reached us today.</li>"}</ul></div>'
     seen[today] = shown
