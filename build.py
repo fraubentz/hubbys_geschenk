@@ -439,18 +439,6 @@ def classifieds_html(today):
     li = "".join(f'<li><b>{esc(clean(a, "heading", 3))}.</b> {esc(clean(a, "text", 40))}</li>' for a in (ads[(k + i) % len(ads)] for i in range(min(3, len(ads)))))
     return f'<section class="classifieds"><h3>Classified Advertisements</h3><ul>{li}</ul></section>'
 
-def notices_html(today):
-    items = []
-    for e in load("notices"):
-        t, x = clean(e, "title", 15), clean(e, "text", 60)
-        when = e.get("when") if isinstance(e, dict) else None
-        try: d = dt.date.fromisoformat(when) if when else None
-        except Exception: d = None
-        if t and x and (d is None or d >= today): items.append((d or dt.date.max, e, t, x, d))
-    if not items: return ""
-    li = "".join(f'<li><b>{esc(t)}</b>{" (" + format(d, "%d %B %Y") + ")" if d else ""}. {esc(x)}{more(e)}</li>' for _, e, t, x, d in sorted(items, key=lambda i: i[0])[:6])
-    return f'<section><h3>Notices</h3><ul class="notices">{li}</ul></section>'
-
 def assoc(U):
     n = len(U)
     return all(U[U[x][y]][z] == U[x][U[y][z]] for x in range(n) for y in range(n) for z in range(n))
@@ -560,7 +548,7 @@ def main():
         "PAPERS": "".join(card(p) for p in papers if p is not top), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
-        "NEWS": news_html(), "CLASSIFIEDS": classifieds_html(today), "NOTICES": notices_html(today), "PUZZLE": puzzle_html(today), "VIDEO": video_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(pool), "WEEKEND": week_html(pool, today) if weekend else "",
+        "NEWS": news_html(), "CLASSIFIEDS": classifieds_html(today), "PUZZLE": puzzle_html(today), "VIDEO": video_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(pool), "WEEKEND": week_html(pool, today) if weekend else "",
         "PRICE": "Weekend Edition, price twopence" if weekend else "Price one penny",
     }
     base = TEMPLATE
@@ -653,7 +641,6 @@ table.cayley{width:auto;margin:.6rem auto}table.cayley th,table.cayley td{text-a
 <section><h3>Lexicon of the Day</h3><p><b>{{LEX_T}}.</b> {{LEX_D}}</p></section>
 {{OTD}}
 {{CORNER}}
-{{NOTICES}}
 {{PUZZLE}}
 <section class="ad"><p class="adlabel"><i>Advertisement</i></p>
 <h3>The GAP Playground</h3>
