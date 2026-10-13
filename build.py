@@ -416,6 +416,19 @@ def week_html(pool, today):
                      + ('<li class="muted">and more on arXiv</li>' if len(ps) > 6 else "") + "</ul></div>")
     return potw + f'<section class="review"><h3>The Week in Review</h3><p class="muted">{len(week)} papers in the past seven days. A paper can appear under several topics.</p><div class="cols">{rows}</div></section>'
 
+def pick_lead(papers, today):
+    """Lead with the newest paper not already featured on an earlier day."""
+    try:
+        with open("archive/lead_seen.json", encoding="utf-8") as f: seen = json.load(f)
+    except Exception:
+        seen = {}
+    old = {u for d, u in seen.items() if d != today}
+    top = next((p for p in papers if p["url"] not in old), papers[0])
+    seen[today] = top["url"]
+    for k in sorted(seen)[:-60]: del seen[k]
+    save("archive/lead_seen.json", json.dumps(seen))
+    return top
+
 def wide_pool(recent):
     time.sleep(3)  # be polite to the arXiv API
     return fetch_papers(100, patient=False) or recent
@@ -441,13 +454,14 @@ def main():
     chips = '<button class="chip on" data-tag="">All</button>' + "".join(
         f'<button class="chip" data-tag="{esc(t)}">{esc(t)}</button>' for t in TAGS)
     pool = papers if stale else wide_pool(papers)
+    top = pick_lead(papers, today.isoformat())
     weekend = today.weekday() >= 5
     values = {
         "TITLE": esc(TITLE), "DEDICATION": esc(DEDICATION),
         "NO": str(max(1, (today - FIRST_EDITION).days + 1)),
         "DATE": f"{today:%A}, the {n}{suffix} of {today:%B}, {today:%Y}",
-        "COUNT": str(len(papers)), "STALE": " arXiv was not answering today, so these dispatches are from our last successful visit." if stale else "", "CHIPS": chips, "LEAD": lead(papers[0]),
-        "PAPERS": "".join(card(p) for p in papers[1:]), "COFFEE": coffee_html(),
+        "COUNT": str(len(papers)), "STALE": " arXiv was not answering today, so these dispatches are from our last successful visit." if stale else "", "CHIPS": chips, "LEAD": lead(top),
+        "PAPERS": "".join(card(p) for p in papers if p is not top), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
         "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(pool), "WEEKEND": week_html(pool, today) if weekend else "",
@@ -464,7 +478,7 @@ def main():
         with open("archive/editions.json", encoding="utf-8") as f: eds = json.load(f)
     except Exception:
         eds = []
-    eds = [e for e in eds if e["date"] != stamp] + [{"date": stamp, "no": values["NO"], "lead": papers[0]["title"]}]
+    eds = [e for e in eds if e["date"] != stamp] + [{"date": stamp, "no": values["NO"], "lead": top["title"]}]
     save("archive/editions.json", json.dumps(eds, ensure_ascii=False))
     save("archive/index.html", archive_page(eds))
     print("Edition printed:", len(papers), "papers")
@@ -515,6 +529,7 @@ th,td{padding:.2rem .3rem;border-bottom:1px dotted var(--soft);text-align:right}
 footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text-align:center;font-size:.9rem;color:var(--soft)}
 .letters{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.letters h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}.letters article{max-width:46rem;margin:auto}.letters h4{margin:.2rem 0;font-family:"Playfair Display",serif}.sig{text-align:right;font-style:italic}.reply{border-left:3px solid var(--red);padding-left:.8rem}.more{font-style:italic}
 .potw,.review{border-bottom:4px double var(--ink);padding:1rem 0}.potw h3{font-size:1.6rem;margin:.2rem 0}.review h3{text-align:center;font-size:1.4rem;margin:0 0 .3rem}.review>.muted{text-align:center}.review .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.5rem}.review h4{margin:0 0 .3rem;font-family:"Playfair Display",serif}.review ul{padding:0;list-style:none}.review li{padding:.25rem 0;border-bottom:1px dotted var(--soft)}
+.side>.ad{border:6px double var(--red);text-align:center}.ad h3{font:700 2rem/1.1 "UnifrakturCook","Playfair Display",serif;margin:.1rem 0}.adlabel{margin:0;font-size:.85rem;color:var(--soft)}.adsub{margin:.2rem 0 .6rem}.ad ul{text-align:left;padding-left:1.2rem;margin:.5rem 0}.adcta{margin:.6rem 0 .3rem;font-size:1.05rem}.adcta a{font-weight:700}
 .nav{display:flex;justify-content:center;gap:2rem;margin:.5rem 0 0;font-style:italic}
 .diagram{border-bottom:4px double var(--ink);padding:1rem 0;text-align:center}
 .diagram figure{margin:0}.diagram img{max-width:100%;max-height:26rem;background:#fffdf5;padding:.6rem;border:1px solid var(--ink)}
@@ -539,6 +554,13 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 <section><h3>Lexicon of the Day</h3><p><b>{{LEX_T}}.</b> {{LEX_D}}</p></section>
 {{OTD}}
 {{CORNER}}
+<section class="ad"><p class="adlabel"><i>Advertisement</i></p>
+<h3>The GAP Playground</h3>
+<p class="adsub"><i>A Parlour for the Computational Algebraist</i></p>
+<p>Friends of the permutation and the semigroup! Set down your GAP code, press <b>Run</b>, and the answer is returned within the minute, computed upon a fresh machine furnished with the complete GAP bundle.</p>
+<ul><li>The <i>Semigroups</i> package at your disposal</li><li>Results typeset in the manner of the best journals</li><li>Computations of up to two minutes accommodated</li></ul>
+<p class="adcta"><a href="https://gap-online.pages.dev">Pay a call at gap-online.pages.dev</a></p>
+<p class="muted">Designed with affection. Admission free.</p></section>
 </aside></div>
 {{LETTERS}}
 {{NEWS}}
