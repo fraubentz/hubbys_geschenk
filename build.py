@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The Semigroup Gazette: prints a fresh index.html each run. Standard library only."""
-import csv, datetime as dt, html, io, json, os, re, sys, time
+import csv, datetime as dt, html, io, itertools, json, os, random, re, sys, time
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
@@ -429,6 +429,102 @@ def pick_lead(papers, today):
     save("archive/lead_seen.json", json.dumps(seen))
     return top
 
+CHANNELS = [("3Blue1Brown", "UCYO_jab_esuFRV4b17AJtAw"), ("Numberphile", "UCoxcjq-8xIDTYp3uz647V5A"),
+            ("Mathologer", "UC1_uAIS3r8Vu6JjXWvastJg"), ("Stand-up Maths", "UCSju5G2aFaWMqn-_0YBtq5A")]
+
+def classifieds_html(today):
+    ads = [e for e in load("classifieds") if clean(e, "heading", 3) and clean(e, "text", 40)]
+    if not ads: return ""
+    k = today.toordinal() * 3
+    li = "".join(f'<li><b>{esc(clean(a, "heading", 3))}.</b> {esc(clean(a, "text", 40))}</li>' for a in (ads[(k + i) % len(ads)] for i in range(min(3, len(ads)))))
+    return f'<section class="classifieds"><h3>Classified Advertisements</h3><ul>{li}</ul></section>'
+
+def notices_html(today):
+    items = []
+    for e in load("notices"):
+        t, x = clean(e, "title", 15), clean(e, "text", 60)
+        when = e.get("when") if isinstance(e, dict) else None
+        try: d = dt.date.fromisoformat(when) if when else None
+        except Exception: d = None
+        if t and x and (d is None or d >= today): items.append((d or dt.date.max, e, t, x, d))
+    if not items: return ""
+    li = "".join(f'<li><b>{esc(t)}</b>{" (" + format(d, "%d %B %Y") + ")" if d else ""}. {esc(x)}{more(e)}</li>' for _, e, t, x, d in sorted(items, key=lambda i: i[0])[:6])
+    return f'<section><h3>Notices</h3><ul class="notices">{li}</ul></section>'
+
+def assoc(U):
+    n = len(U)
+    return all(U[U[x][y]][z] == U[x][U[y][z]] for x in range(n) for y in range(n) for z in range(n))
+
+def completions(T, blanks, limit=2):
+    found = 0
+    for vals in itertools.product(range(len(T)), repeat=len(blanks)):
+        U = [r[:] for r in T]
+        for (i, j), v in zip(blanks, vals): U[i][j] = v
+        if assoc(U):
+            found += 1
+            if found >= limit: break
+    return found
+
+def puzzle_html(today):
+    rng = random.Random(today.toordinal())
+    cyc = lambda n: [[(i + j) % n for j in range(n)] for i in range(n)]
+    pool = [cyc(3), cyc(4), cyc(5), [[i ^ j for j in range(4)] for i in range(4)],
+            [[min(i, j) for j in range(4)] for i in range(4)], [[min(i, j) for j in range(5)] for i in range(5)],
+            [[i for j in range(4)] for i in range(4)], [[j for j in range(4)] for i in range(4)],
+            [[0] * 4 for i in range(4)], [[0, 1, 2], [1, 1, 1], [2, 2, 2]]]
+    T = pool[today.toordinal() % len(pool)]
+    if not assoc(T): return ""
+    n = len(T)
+    p = list(range(n)); rng.shuffle(p)
+    R = [[0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n): R[p[i]][p[j]] = p[T[i][j]]
+    cells = [(i, j) for i in range(n) for j in range(n)]
+    for k in range(rng.randint(3, 5), 1, -1):
+        for _ in range(25):
+            blanks = rng.sample(cells, k)
+            Q = [r[:] for r in R]
+            for i, j in blanks: Q[i][j] = 0
+            if completions(Q, blanks) == 1: break
+        else:
+            continue
+        break
+    else:
+        return ""
+    L, bset = "abcde", set(blanks)
+    def grid(show):
+        rows = "".join("<tr><th>" + L[i] + "</th>" + "".join(
+            f'<td class="blank">{L[R[i][j]] if show else "?"}</td>' if (i, j) in bset else f"<td>{L[R[i][j]]}</td>"
+            for j in range(n)) + "</tr>" for i in range(n))
+        return '<table class="cayley"><tr><th>&middot;</th>' + "".join(f"<th>{L[j]}</th>" for j in range(n)) + "</tr>" + rows + "</table>"
+    return (f'<section><h3>The Puzzle Page</h3><p>Fill each <b>?</b> so that the table is associative, $(xy)z = x(yz)$. Row $x$, column $y$ gives $xy$. The answer is unique.</p>'
+            f'{grid(False)}<details><summary>Show the answer</summary>{grid(True)}</details></section>')
+
+def video_html():
+    ns = {"a": "http://www.w3.org/2005/Atom", "y": "http://www.youtube.com/xml/schemas/2015"}
+    vids = []
+    for name, cid in CHANNELS:
+        xml = get(f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}", tries=2)
+        try:
+            for e in ET.fromstring(xml).findall("a:entry", ns)[:3]:
+                vid = e.findtext("y:videoId", "", ns)
+                if re.fullmatch(r"[\w-]{11}", vid): vids.append((e.findtext("a:published", "", ns), vid, e.findtext("a:title", "", ns), name))
+        except Exception as ex:
+            print(f"video feed failed ({ex}): {name}", file=sys.stderr)
+    if not vids:
+        try:
+            with open("archive/video.json", encoding="utf-8") as f: return json.load(f)   # last good one
+        except Exception:
+            return ""
+    vids.sort(reverse=True)
+    _, vid, title, name = vids[0]
+    more = "".join(f'<li><a href="https://www.youtube.com/watch?v={v}">{esc(t)}</a> <i>{esc(n)}</i></li>' for _, v, t, n in vids[1:4])
+    out = (f'<section class="cine"><h3>At the Cinematograph</h3><div class="vid"><iframe src="https://www.youtube-nocookie.com/embed/{vid}" title="{esc(title)}" '
+           f'loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
+           f'<p><b>{esc(title)}</b> <i>{esc(name)}</i>. <a href="https://www.youtube.com/watch?v={vid}">Watch on YouTube</a></p><ul>{more}</ul></section>')
+    save("archive/video.json", json.dumps(out, ensure_ascii=False))
+    return out
+
 def wide_pool(recent):
     time.sleep(3)  # be polite to the arXiv API
     return fetch_papers(100, patient=False) or recent
@@ -464,7 +560,7 @@ def main():
         "PAPERS": "".join(card(p) for p in papers if p is not top), "COFFEE": coffee_html(),
         "LEX_T": esc(lex[0]), "LEX_D": esc(lex[1]),
         "PROB_T": esc(prob[0]), "PROB_Q": esc(prob[1]), "PROB_A": esc(prob[2]),
-        "NEWS": news_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(pool), "WEEKEND": week_html(pool, today) if weekend else "",
+        "NEWS": news_html(), "CLASSIFIEDS": classifieds_html(today), "NOTICES": notices_html(today), "PUZZLE": puzzle_html(today), "VIDEO": video_html(), "OTD": otd_html(today), "CORNER": corner_html(today), "LETTERS": letters_html(today), "DIAGRAM": diagram_html(pool), "WEEKEND": week_html(pool, today) if weekend else "",
         "PRICE": "Weekend Edition, price twopence" if weekend else "Price one penny",
     }
     base = TEMPLATE
@@ -530,6 +626,9 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 .letters{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.letters h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}.letters article{max-width:46rem;margin:auto}.letters h4{margin:.2rem 0;font-family:"Playfair Display",serif}.sig{text-align:right;font-style:italic}.reply{border-left:3px solid var(--red);padding-left:.8rem}.more{font-style:italic}
 .potw,.review{border-bottom:4px double var(--ink);padding:1rem 0}.potw h3{font-size:1.6rem;margin:.2rem 0}.review h3{text-align:center;font-size:1.4rem;margin:0 0 .3rem}.review>.muted{text-align:center}.review .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.5rem}.review h4{margin:0 0 .3rem;font-family:"Playfair Display",serif}.review ul{padding:0;list-style:none}.review li{padding:.25rem 0;border-bottom:1px dotted var(--soft)}
 .side>.ad{border:6px double var(--red);text-align:center}.ad h3{font:700 2rem/1.1 "UnifrakturCook","Playfair Display",serif;margin:.1rem 0}.adlabel{margin:0;font-size:.85rem;color:var(--soft)}.adsub{margin:.2rem 0 .6rem}.ad ul{text-align:left;padding-left:1.2rem;margin:.5rem 0}.adcta{margin:.6rem 0 .3rem;font-size:1.05rem}.adcta a{font-weight:700}
+.classifieds{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem}.classifieds h3,.cine h3{text-align:center;font-size:1.4rem;margin:0 0 .6rem}.classifieds ul{column-width:15rem;column-gap:1.5rem;column-rule:1px solid var(--soft);padding:0;list-style:none;font-size:.95rem}.classifieds li{break-inside:avoid;padding:.4rem 0;border-bottom:1px dotted var(--soft)}
+.cine{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.8rem;max-width:42rem;margin-left:auto;margin-right:auto}.vid{position:relative;padding-top:56.25%}.vid iframe{position:absolute;inset:0;width:100%;height:100%;border:1px solid var(--ink)}.cine ul,.notices{padding-left:1.1rem;font-size:.95rem}
+table.cayley{width:auto;margin:.6rem auto}table.cayley th,table.cayley td{text-align:center;padding:.3rem .7rem;border:1px solid var(--soft)}table.cayley .blank{background:#fffdf5;color:var(--red);font-weight:700}
 .nav{display:flex;justify-content:center;gap:2rem;margin:.5rem 0 0;font-style:italic}
 .diagram{border-bottom:4px double var(--ink);padding:1rem 0;text-align:center}
 .diagram figure{margin:0}.diagram img{max-width:100%;max-height:26rem;background:#fffdf5;padding:.6rem;border:1px solid var(--ink)}
@@ -554,6 +653,8 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 <section><h3>Lexicon of the Day</h3><p><b>{{LEX_T}}.</b> {{LEX_D}}</p></section>
 {{OTD}}
 {{CORNER}}
+{{NOTICES}}
+{{PUZZLE}}
 <section class="ad"><p class="adlabel"><i>Advertisement</i></p>
 <h3>The GAP Playground</h3>
 <p class="adsub"><i>A Parlour for the Computational Algebraist</i></p>
@@ -563,6 +664,8 @@ footer{border-top:4px double var(--ink);margin-top:1.5rem;padding-top:.7rem;text
 <p class="muted">Designed with affection. Admission free.</p></section>
 </aside></div>
 {{LETTERS}}
+{{CLASSIFIEDS}}
+{{VIDEO}}
 {{NEWS}}
 <footer><p>{{DEDICATION}}</p><p>{{COUNT}} recent papers gathered from arXiv.{{STALE}} Thank you to arXiv for use of its open access interoperability.</p></footer>
 </div><script>
