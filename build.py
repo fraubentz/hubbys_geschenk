@@ -429,8 +429,12 @@ def pick_lead(papers, today):
     save("archive/lead_seen.json", json.dumps(seen))
     return top
 
-CHANNELS = [("3Blue1Brown", "UCYO_jab_esuFRV4b17AJtAw"), ("Numberphile", "UCoxcjq-8xIDTYp3uz647V5A"),
-            ("Mathologer", "UC1_uAIS3r8Vu6JjXWvastJg"), ("Stand-up Maths", "UCSju5G2aFaWMqn-_0YBtq5A")]
+# (display name, channel ID like "UC..." or handle like "@name"); a channel that cannot be found is skipped
+CHANNELS = [("3Blue1Brown", "UCYO_jab_esuFRV4b17AJtAw"), ("Margin", "UCtjLZANkZ4YMDMfmjABnp-w"),
+            ("Richard E. Borcherds", "UCIyDqfi_cbkp-RU20aBF-MQ"), ("Socratica", "UCW6TXMZ5Pq6yL6_k5NZ2e0Q"),
+            ("Numberphile", "UCoxcjq-8xIDTYp3uz647V5A"), ("Mathologer", "UC1_uAIS3r8Vu6JjXWvastJg"),
+            ("Stand-up Maths", "UCSju5G2aFaWMqn-_0YBtq5A"), ("Michael Penn", "@MichaelPennMath"),
+            ("Wrath of Math", "@WrathofMath"), ("Oxford Mathematics", "@OxfordMathematics")]
 
 def classifieds_html(today):
     ads = [e for e in load("classifieds") if clean(e, "heading", 3) and clean(e, "text", 40)]
@@ -488,28 +492,48 @@ def puzzle_html(today):
     return (f'<section><h3>The Puzzle Page</h3><p>Fill each <b>?</b> so that the table is associative, $(xy)z = x(yz)$. Row $x$, column $y$ gives $xy$. The answer is unique.</p>'
             f'{grid(False)}<details><summary>Show the answer</summary>{grid(True)}</details></section>')
 
+def channel_id(ref):
+    """A channel is either an ID (UC...) or a handle (@name); handles are looked up once and remembered."""
+    if not ref.startswith("@"): return ref
+    try:
+        with open("archive/yt_ids.json", encoding="utf-8") as f: ids = json.load(f)
+    except Exception:
+        ids = {}
+    if ref not in ids:
+        m = re.search(r"feeds/videos\.xml\?channel_id=(UC[\w-]{22})", get(f"https://www.youtube.com/{ref}", tries=2) or "")
+        if not m: return None
+        ids[ref] = m.group(1)
+        save("archive/yt_ids.json", json.dumps(ids))
+    return ids[ref]
+
 def video_html():
     ns = {"a": "http://www.w3.org/2005/Atom", "y": "http://www.youtube.com/xml/schemas/2015"}
-    vids = []
-    for name, cid in CHANNELS:
+    per = {}
+    for name, ref in CHANNELS:
+        cid = channel_id(ref)
+        if not cid: continue
         xml = get(f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}", tries=2)
         try:
-            for e in ET.fromstring(xml).findall("a:entry", ns)[:3]:
-                vid = e.findtext("y:videoId", "", ns)
-                if re.fullmatch(r"[\w-]{11}", vid): vids.append((e.findtext("a:published", "", ns), vid, e.findtext("a:title", "", ns), name))
+            vids = [(e.findtext("a:published", "", ns), e.findtext("y:videoId", "", ns), e.findtext("a:title", "", ns), name)
+                    for e in ET.fromstring(xml).findall("a:entry", ns)[:3]]
+            vids = sorted([v for v in vids if re.fullmatch(r"[\w-]{11}", v[1])], reverse=True)
+            if vids: per[name] = vids[0]
         except Exception as ex:
             print(f"video feed failed ({ex}): {name}", file=sys.stderr)
-    if not vids:
+    if not per:
         try:
             with open("archive/video.json", encoding="utf-8") as f: return json.load(f)   # last good one
         except Exception:
             return ""
-    vids.sort(reverse=True)
-    _, vid, title, name = vids[0]
-    more = "".join(f'<li><a href="https://www.youtube.com/watch?v={v}">{esc(t)}</a> <i>{esc(n)}</i></li>' for _, v, t, n in vids[1:4])
+    names = sorted(per)
+    pick = names[dt.datetime.now(dt.timezone.utc).date().toordinal() % len(names)]   # a different channel each day
+    _, vid, title, name = per[pick]
+    more = "".join(f'<li><a href="https://www.youtube.com/watch?v={v}">{esc(t)}</a> <i>{esc(n)}</i></li>'
+                   for _, v, t, n in sorted((per[n] for n in names if n != pick), reverse=True)[:4])
     out = (f'<section class="cine"><h3>At the Cinematograph</h3><div class="vid"><iframe src="https://www.youtube-nocookie.com/embed/{vid}" title="{esc(title)}" '
            f'loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
-           f'<p><b>{esc(title)}</b> <i>{esc(name)}</i>. <a href="https://www.youtube.com/watch?v={vid}">Watch on YouTube</a></p><ul>{more}</ul></section>')
+           f'<p><b>{esc(title)}</b> <i>{esc(name)}</i>. <a href="https://www.youtube.com/watch?v={vid}">Watch on YouTube</a></p>'
+           f'<p class="muted">Also new:</p><ul>{more}</ul></section>')
     save("archive/video.json", json.dumps(out, ensure_ascii=False))
     return out
 
