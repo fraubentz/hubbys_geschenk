@@ -100,6 +100,22 @@ def fetch_papers(n=25, patient=True):
                     "cat": pc.get("term") if pc is not None else ""})
     return out
 
+def tex_clean(t):
+    """Tidy LaTeX that MathJax would show as errors: text macros and a few author-defined shortcuts."""
+    for _ in range(3):
+        t = re.sub(r"\\(?:emph|textit|textbf|textrm|textsl|textsc|mbox|text)\{([^{}]*)\}", r"\1", t)
+    t = re.sub(r"\\m(?![A-Za-z])", r"\\mathfrak{m}", t)
+    t = re.sub(r"\\tr(?![A-Za-z])", r"\\operatorname{tr}", t)
+    return t
+
+STRONG = {"math.GR", "math.RA", "math.CO", "math.LO", "math.CT", "cs.FL", "cs.LO"}
+def relevance(p):
+    """How squarely a paper sits in semigroup theory (0 = merely mentions the word)."""
+    sc = 3 if "semigroup" in p["title"].lower() else 0
+    sc += 2 if p["cat"] in STRONG else 1 if p["cat"] in {"math.AC", "math.NT"} else 0
+    sc += 1 if p["abs"].lower().count("semigroup") >= 2 else 0
+    return sc
+
 def tags_for(p):
     text = (p["title"] + " " + p["abs"]).lower()
     return [k for k, words in TAGS.items() if any(w in text for w in words)]
@@ -115,12 +131,12 @@ def card(p):
     return (f'<article class="paper" data-tags="{esc("|".join(tags_for(p)))}">'
             f'<h3><a href="{p["url"]}">{esc(p["title"])}</a></h3><p class="by">{byline(p)}</p>'
             f'<div>{chips_html(p)}</div>'
-            f'<details><summary>Read the abstract</summary><p>{esc(p["abs"])}</p></details></article>')
+            f'<details><summary>Read the abstract</summary><p>{esc(tex_clean(p["abs"]))}</p></details></article>')
 
 def lead(p):
     return (f'<article class="lead"><p class="kicker"><i>Our leading dispatch</i></p>'
             f'<h2><a href="{p["url"]}">{esc(p["title"])}</a></h2><p class="by">{byline(p)}</p>'
-            f'<div class="abs">{esc(p["abs"])}</div><div>{chips_html(p)}</div></article>')
+            f'<div class="abs">{esc(tex_clean(p["abs"]))}</div><div>{chips_html(p)}</div></article>')
 
 def stooq(sym):
     txt = get(f"https://stooq.com/q/d/l/?s={sym}&i=d", tries=2)
@@ -242,8 +258,10 @@ def diagram_html(papers):
     except Exception:
         seen = {}
     old = {u for d, u in seen.items() if d != today}   # papers already featured on earlier days
-    off = dt.datetime.now(dt.timezone.utc).date().toordinal() % max(1, len(papers))
-    for p in (papers[off:] + papers[:off])[:25]:
+    rel = [p for p in papers if relevance(p) >= 2]
+    rest = [p for p in papers if relevance(p) < 2]
+    off = dt.datetime.now(dt.timezone.utc).date().toordinal() % max(1, len(rel))
+    for p in (rel[off:] + rel[:off] + rest)[:25]:
         if p["url"] in old: continue
         idv = p["url"].rsplit("/abs/", 1)[-1]
         txt = get(f"https://arxiv.org/html/{idv}", tries=1)
@@ -295,17 +313,25 @@ def news_html():
         seen = {}
     old = {l for d, ls in seen.items() if d != today for l in ls}   # links shown on earlier days
     qs = [("Mathematics and AI", 'mathematics ("artificial intelligence" OR AI OR "machine learning") when:7d'),
-          ("New results", 'mathematicians (theorem OR proof OR discovery OR conjecture) -AI -"artificial intelligence" when:7d'),
+          ("New results", '(mathematician OR mathematicians OR mathematics) (theorem OR proof OR proves OR proved OR conjecture OR counterexample OR "solves") -AI -"artificial intelligence" when:7d'),
           ("Mathematics in the world", 'mathematics (mathematician OR olympiad OR "math prize" OR "Fields Medal" OR "Abel Prize" OR "mathematics education") -AI -"artificial intelligence" when:7d')]
-    cols, shown, used = "", [], set()
-    for head, q in qs:
+    shown, used, built = [], set(), {}
+    RESULT = re.compile(r"theorem|proof|prove|conjecture|counterexample|solv|resolv|breakthrough|discover", re.I)
+    OFFTOPIC = re.compile(r"trailer|movie|film|biblical|horoscope|\bstock|crypto|casino", re.I)
+    STOP = set("the a an of in on at to for and or with from by is are was were as its it new how what why this that after into over about says say".split())
+    words = lambda t: {w for w in re.findall(r"[a-z0-9]+", t.lower()) if w not in STOP and len(w) > 2}
+    BIG = ("openai", "deepmind", "google", "anthropic", "chatgpt", "gpt")
+    kept = []   # word sets of every headline already shown, across all lists
+    # lists are filled in this order, so a genuine result is not swallowed by the AI list; shown in the original order
+    for head, q in [qs[1], qs[2], qs[0]]:
         xml = get("https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": "en", "gl": "US", "ceid": "US:en"}), tries=2)
         items, titles = [], set()
         try:
             for it in ET.fromstring(xml).iter("item"):
                 src, t = it.findtext("source", ""), it.findtext("title", "")
                 if src and t.endswith(" - " + src): t = t[:-len(src) - 3]
-                if t.lower() in titles: continue
+                if t.lower() in titles or OFFTOPIC.search(t): continue
+                if head == "New results" and not RESULT.search(t): continue
                 titles.add(t.lower())
                 try: when = parsedate_to_datetime(it.findtext("pubDate", ""))
                 except Exception: when = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
@@ -314,11 +340,21 @@ def news_html():
             print(f"news failed ({e})", file=sys.stderr)
         items.sort(key=lambda i: i[0], reverse=True)
         items = [i for i in items if i[1].lower() not in used and i[2] not in used]   # nothing twice across the lists
-        pick = ([i for i in items if i[2] not in old] + [i for i in items if i[2] in old])[:6]   # new stories first
+        pick, big = [], {}
+        for i in [i for i in items if i[2] not in old] + [i for i in items if i[2] in old]:   # new stories first
+            ws = words(i[1])
+            if any(len(ws & k) / max(1, len(ws | k)) >= 0.45 for k in kept + [words(j[1]) for j in pick]): continue   # same story
+            names = [b for b in BIG if b in i[1].lower()]
+            if any(big.get(b, 0) >= 2 for b in names): continue   # at most two items per big name per list
+            for b in names: big[b] = big.get(b, 0) + 1
+            pick.append(i)
+            if len(pick) == 6: break
+        kept += [words(i[1]) for i in pick]
         shown += [i[2] for i in pick]
         used.update([i[1].lower() for i in pick] + [i[2] for i in pick])
         li = "".join(f'<li><a href="{esc(l)}">{esc(t)}</a> <i>{esc(s)}, {w:%d %b %Y}</i></li>' for w, t, l, s in pick)
-        cols += f'<div><h4>{head}</h4><ul>{li or "<li class=muted>No headlines reached us today.</li>"}</ul></div>'
+        built[head] = f'<div><h4>{head}</h4><ul>{li or "<li class=muted>No headlines reached us today.</li>"}</ul></div>'
+    cols = "".join(built[h] for h, _ in qs)
     seen[today] = shown
     for d in sorted(seen)[:-14]: del seen[d]
     os.makedirs("archive", exist_ok=True)
@@ -406,7 +442,7 @@ def week_html(pool, today):
     star = max(week, key=lambda p: (len(tags_for(p)), p["date"]))   # touches the most topics
     au = ", ".join(star["authors"][:8]) + (" et al." if len(star["authors"]) > 8 else "")
     potw = (f'<section class="potw"><p class="kicker"><i>Paper of the Week</i></p><h3><a href="{star["url"]}">{esc(star["title"])}</a></h3>'
-            f'<p class="by">{esc(au)}. <i>{esc(star["cat"])}, submitted {star["date"]}</i></p><div class="abs">{esc(star["abs"])}</div>'
+            f'<p class="by">{esc(au)}. <i>{esc(star["cat"])}, submitted {star["date"]}</i></p><div class="abs">{esc(tex_clean(star["abs"]))}</div>'
             f'<div>{chips_html(star)}</div><p class="muted">Chosen automatically: the paper of the week touching the most semigroup topics.</p></section>')
     rows = ""
     for k, ps in [(k, [p for p in week if k in tags_for(p)]) for k in TAGS] + [("Other topics", [p for p in week if not tags_for(p)])]:
@@ -423,7 +459,8 @@ def pick_lead(papers, today):
     except Exception:
         seen = {}
     old = {u for d, u in seen.items() if d != today}
-    top = next((p for p in papers if p["url"] not in old), papers[0])
+    fresh = [p for p in papers if p["url"] not in old][:12] or papers[:1]
+    top = max(fresh, key=lambda p: relevance(p))   # ties keep the newest (max returns the first)
     seen[today] = top["url"]
     for k in sorted(seen)[:-60]: del seen[k]
     save("archive/lead_seen.json", json.dumps(seen))
@@ -515,7 +552,9 @@ def video_html():
         xml = get(f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}", tries=2)
         try:
             vids = [(e.findtext("a:published", "", ns), e.findtext("y:videoId", "", ns), e.findtext("a:title", "", ns), name)
-                    for e in ET.fromstring(xml).findall("a:entry", ns)[:3]]
+                    for e in ET.fromstring(xml).findall("a:entry", ns)[:10]
+                    if "#" not in e.findtext("a:title", "", ns)
+                    and not any("/shorts/" in (l.get("href") or "") for l in e.findall("a:link", ns))]   # skip Shorts
             vids = sorted([v for v in vids if re.fullmatch(r"[\w-]{11}", v[1])], reverse=True)
             if vids: per[name] = vids[0]
         except Exception as ex:
@@ -597,7 +636,7 @@ TEMPLATE = r"""<!doctype html>
 <title>{{TITLE}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&family=Playfair+Display:wght@700;900&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-<script>window.MathJax={tex:{inlineMath:[['$','$']]}}</script>
+<script>window.MathJax={tex:{inlineMath:[['$','$']],macros:{m:'\\mathfrak{m}',tr:'\\operatorname{tr}'}}}</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 <style>
 :root{--desk:#c9b98f;--paper:#efe3c2;--ink:#2a2118;--soft:#6b5b45;--red:#7d2a1e;--green:#3f5a3a}
